@@ -1,0 +1,130 @@
+openapi: 3.0.3
+info:
+  title: Transactional Engine API
+  description: API de alta concurrencia para procesamiento e ingesta de transacciones financieras idempotentes.
+  version: 1.0.0
+paths:
+  /v1/transactions:
+    post:
+      summary: Ingesta de Nueva Transacción
+      description: Recibe una solicitud de transferencia entre cuentas, valida idempotencia y encola la solicitud para su procesamiento asíncrono.
+      parameters:
+        - name: X-Idempotency-Key
+          in: header
+          required: true
+          description: Clave única UUIDv4 enviada por el cliente para prevenir cobros duplicados.
+          schema:
+            type: string
+            format: uuid
+            example: "9b1deb4d-3b7d-4bad-9bdd-2b0d7b3dcb6d"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransactionRequest'
+      responses:
+        '202':
+          description: Transacción Aceptada y Encolada.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionResponse'
+        '400':
+          description: Datos de entrada inválidos o esquema incorrecto.
+        '409':
+          description: Llave de idempotencia en conflicto con un payload distinto.
+
+  /v1/transactions/{id}:
+    get:
+      summary: Consulta de Estado de Transacción
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID de la transacción retornado en la ingesta.
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Detalle y estado actual de la transacción.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TransactionDetail'
+        '404':
+          description: Transacción no encontrada.
+
+components:
+  schemas:
+    TransactionRequest:
+      type: object
+      required:
+        - source_account_id
+        - destination_account_id
+        - amount
+        - currency
+      properties:
+        source_account_id:
+          type: string
+          format: uuid
+          example: "a1b2c3d4-e5f6-7a8b-9c0d-1e2f3a4b5c6d"
+        destination_account_id:
+          type: string
+          format: uuid
+          example: "f6e5d4c3-b2a1-0f9e-8d7c-6b5a4f3e2d1c"
+        amount:
+          type: number
+          format: double
+          minimum: 0.01
+          example: 1500.50
+        currency:
+          type: string
+          example: "MXN"
+
+    TransactionResponse:
+      type: object
+      properties:
+        transaction_id:
+          type: string
+          format: uuid
+          example: "c73d8b10-2e4a-4f12-8821-0a9b8c7d6e5f"
+        status:
+          type: string
+          enum: [PENDING, COMPLETED, FAILED]
+          example: "PENDING"
+        created_at:
+          type: string
+          format: date-time
+          example: "2026-09-21T23:30:00Z"
+
+    TransactionDetail:
+      type: object
+      properties:
+        transaction_id:
+          type: string
+          format: uuid
+        source_account_id:
+          type: string
+          format: uuid
+        destination_account_id:
+          type: string
+          format: uuid
+        amount:
+          type: number
+        currency:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, COMPLETED, FAILED]
+        failure_reason:
+          type: string
+          nullable: true
+          example: "INSUFFICIENT_FUNDS"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
